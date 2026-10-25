@@ -380,6 +380,19 @@ input[type=range].range::-moz-range-thumb{width:24px;height:24px;border-radius:5
   .cfoot{position:static;flex-wrap:wrap;border-radius:var(--r-lg)}
 }
 
+/* add rows for values, always-ask and caps; remove buttons on items Sameer added */
+.vlist + .addrow, .toggle + .addrow{margin-top:12px}
+.toggle + .addrow{margin-bottom:4px}
+.capitem + .addrow{margin-top:12px}
+.addcap .amt{display:flex;align-items:center;gap:4px;width:118px;flex:none;padding:0 6px 0 14px;border-radius:999px;background:var(--surface-tint);box-shadow:inset 0 0 0 1px var(--line),inset 0 2px 4px rgba(40,20,120,.06);color:var(--muted);font-weight:600}
+.addcap .amt input{flex:1;width:100%;min-width:0;padding:11px 4px;background:transparent;box-shadow:none;-moz-appearance:textfield}
+.addcap .amt input::-webkit-outer-spin-button,.addcap .amt input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.tr{display:flex;align-items:center;gap:8px}
+.del{width:26px;height:26px;flex:none;border:0;border-radius:50%;background:#fff;color:var(--muted);display:grid;place-items:center;padding:0;box-shadow:inset 0 0 0 1px var(--line)}
+.del:hover{color:#B8213D;background:var(--coral-soft)}
+.del svg{width:12px;height:12px}
+.vitem .ud .del{margin-left:4px}
+
 a.brand{text-decoration:none;color:inherit;border-radius:16px}a.brand:hover .name{text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
@@ -447,7 +460,6 @@ a.brand{text-decoration:none;color:inherit;border-radius:16px}a.brand:hover .nam
 
 <script>
 /* ========================= STATE ========================= */
-const CAP_KEYS = ['Food delivery','Subscriptions','Shopping','Travel'];
 const ASK = {
   late:'Late-night purchases (11pm–6am)',
   subs:'New subscriptions',
@@ -469,6 +481,9 @@ const state = {
   constitutionVersion: 7,
   highlightCap: null,          // cap key, always-ask key, cooling-off key, or RED_LINES_KEY
   rlDraft: '',                 // text sitting in the "add a red line" input
+  drafts: { value:'', ask:'', capName:'', capAmt:'' },  // text in the other "add" inputs
+  custom: { values:[], ask:[], caps:[] },              // items Sameer added himself (removable)
+  capMax: { 'Travel':30000 },  // slider ceiling per cap; others default to 15,000
   expanded: new Set(),
   nudgeDismissed: false,
   howOpen: false,
@@ -625,7 +640,7 @@ function evaluateFeed(){
 /* Count how many ways the working Constitution is looser than the last saved one. */
 function countLoosenings(prev, cur){
   let n=0;
-  CAP_KEYS.forEach(k=>{ if(cur.caps[k] > prev.caps[k]) n++; });
+  Object.keys(prev.caps).forEach(k=>{ if(!(k in cur.caps) || cur.caps[k] > prev.caps[k]) n++; });
   Object.keys(prev.alwaysAsk).forEach(k=>{ if(prev.alwaysAsk[k] && !cur.alwaysAsk[k]) n++; });
   Object.keys(prev.coolingOff).forEach(k=>{ if(prev.coolingOff[k] && !cur.coolingOff[k]) n++; });
   prev.redLines.forEach(r=>{ if(!cur.redLines.includes(r)) n++; });
@@ -814,6 +829,43 @@ function renderAudit(m){
 }
 
 /* ---- Constitution ---- */
+/* "Add" rows and removal for things Sameer adds himself (built-in items stay fixed). */
+const addRow = (kind, placeholder, label) => `<div class="addrow"><input data-draft="${kind}" value="${esc(state.drafts[kind])}" placeholder="${placeholder}" aria-label="${label}"><button class="btn btn-soft" data-add="${kind}">Add</button></div>`;
+const rmBtn = (kind, key) => state.custom[kind==='value'?'values':kind==='ask'?'ask':'caps'].includes(key)
+  ? `<button class="del" data-del="${kind}" data-key="${esc(key)}" aria-label="Remove ${esc(key)}">${ic('x')}</button>` : '';
+const sameName = (list, v) => list.some(x => x.toLowerCase() === v.toLowerCase());
+
+function addItem(kind){
+  const c=state.constitution, d=state.drafts;
+  if(kind==='value'){
+    const v=d.value.trim(); if(!v) return;
+    if(sameName(c.values,v)) return toast(`"${esc(v)}" is already one of your values.`);
+    c.values.push(v); state.custom.values.push(v); d.value='';
+  } else if(kind==='ask'){
+    const v=d.ask.trim(); if(!v) return;
+    if(sameName(Object.keys(c.alwaysAsk),v)) return toast(`"${esc(v)}" is already on your list.`);
+    c.alwaysAsk[v]=true; state.custom.ask.push(v); d.ask='';
+  } else if(kind==='cap'){
+    const v=d.capName.trim(), amt=Math.round(+d.capAmt/100)*100;
+    if(!v) return toast('Name the category first, e.g. Gifts.');
+    if(sameName(Object.keys(c.caps),v)) return toast(`${esc(v)} already has a cap. Use its slider to change it.`);
+    if(!(amt>=500)) return toast('Enter a monthly cap of at least ₹500.');
+    c.caps[v]=amt; state.spend[v]=state.spend[v]||0; state.custom.caps.push(v);
+    state.capMax[v]=Math.max(15000, Math.ceil(amt*2/5000)*5000);
+    d.capName=''; d.capAmt='';
+  }
+  render();
+  toast('Added. Save to apply it to Aria.');
+}
+function removeItem(kind, key){
+  const c=state.constitution, list=state.custom[kind==='value'?'values':kind==='ask'?'ask':'caps'];
+  if(kind==='value') c.values=c.values.filter(x=>x!==key);
+  else if(kind==='ask') delete c.alwaysAsk[key];
+  else delete c.caps[key];
+  list.splice(list.indexOf(key),1);
+  render();
+}
+
 function renderConstitution(m){
   const c=state.constitution;
   const hl = k => state.highlightCap===k ? 'hl' : '';
@@ -822,21 +874,23 @@ function renderConstitution(m){
   m.innerHTML = topbar('Constitution', 'Your rules, in plain words.') +
   `<div class="cgrid"><div class="col">
     <section class="clay panel"><div class="ph">${tile('spark','violet')}<div><h3 class="h3">Values</h3><div class="meta">Most important first. Aria is told the order.</div></div></div><div class="vlist">` +
-      c.values.map((v,i)=>`<div class="vitem"><span class="grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="rank">${i+1}</span><span class="nm">${v}</span><span class="ud"><button data-mv="${i}:-1" ${i===0?'disabled':''} aria-label="Move ${v} up"><svg aria-hidden="true" style="transform:rotate(-90deg)"><use href="#i-arrow"/></svg></button><button data-mv="${i}:1" ${i===c.values.length-1?'disabled':''} aria-label="Move ${v} down"><svg aria-hidden="true" style="transform:rotate(90deg)"><use href="#i-arrow"/></svg></button></span></div>`).join('') +
-    `</div></section>
+      c.values.map((v,i)=>`<div class="vitem"><span class="grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="rank">${i+1}</span><span class="nm">${esc(v)}</span><span class="ud"><button data-mv="${i}:-1" ${i===0?'disabled':''} aria-label="Move ${esc(v)} up"><svg aria-hidden="true" style="transform:rotate(-90deg)"><use href="#i-arrow"/></svg></button><button data-mv="${i}:1" ${i===c.values.length-1?'disabled':''} aria-label="Move ${esc(v)} down"><svg aria-hidden="true" style="transform:rotate(90deg)"><use href="#i-arrow"/></svg></button>${rmBtn('value',v)}</span></div>`).join('') +
+    `</div>${addRow('value','Add a value, e.g. Learning','New value')}</section>
     <section class="clay panel"><div class="ph">${tile('hand','sky')}<div><h3 class="h3">Always ask me first</h3><div class="meta">Aria holds these until you say yes.</div></div></div>` +
-      Object.keys(c.alwaysAsk).map(k=>`<div class="toggle ${hl(k)}"><span>${k}</span>${sw(c.alwaysAsk[k],`data-tg="${k}" aria-label="${k}"`)}</div>`).join('') +
+      Object.keys(c.alwaysAsk).map(k=>`<div class="toggle ${hl(k)}"><span>${esc(k)}</span><span class="tr">${rmBtn('ask',k)}${sw(c.alwaysAsk[k],`data-tg="${esc(k)}" aria-label="${esc(k)}"`)}</span></div>`).join('') +
+      addRow('ask','Add a rule, e.g. Booking flights','New always-ask rule') +
       `<div class="cool"><div class="ch">${ic('moon')}Cooling-off</div>` +
       Object.keys(c.coolingOff).map(k=>`<div class="toggle ${hl(k)}"><span>${k}</span>${sw(c.coolingOff[k],`data-cool="${k}" aria-label="${k}"`)}</div>`).join('') +
     `</div></section>
     </div><div class="col">
     <section class="clay panel"><div class="ph">${tile('cart','apricot')}<div><h3 class="h3">Spending caps</h3><div class="meta">₹ per month</div></div></div>` +
-      CAP_KEYS.map(k=>{ const over=state.spend[k]>c.caps[k]; const max = k==='Travel'?30000:15000;
+      Object.keys(c.caps).map(k=>{ const spent=state.spend[k]||0; const over=spent>c.caps[k]; const max = state.capMax[k]||15000;
         return `<div class="capitem ${hl(k)}" id="cap-${k.replace(/\s/g,'_')}">
-          <div class="l1"><span>${k}</span><b class="num">${fmt(c.caps[k])}</b></div>
-          <input type="range" class="range" min="500" max="${max}" step="100" value="${c.caps[k]}" data-cap="${k}" style="--p:${pct(c.caps[k],max)}%" aria-label="${k} cap">
-          <div class="l2"><span class="meta">Spent this month</span><span class="pill ${over?'pill-held':'pill-aligned'} obs">${fmt(state.spend[k])}${over?' · over cap':''}</span></div></div>`; }).join('') +
-    `</section>
+          <div class="l1"><span>${esc(k)}</span><span class="tr"><b class="num">${fmt(c.caps[k])}</b>${rmBtn('cap',k)}</span></div>
+          <input type="range" class="range" min="500" max="${max}" step="100" value="${c.caps[k]}" data-cap="${esc(k)}" style="--p:${pct(c.caps[k],max)}%" aria-label="${esc(k)} cap">
+          <div class="l2"><span class="meta">Spent this month</span><span class="pill ${over?'pill-held':'pill-aligned'} obs">${fmt(spent)}${over?' · over cap':''}</span></div></div>`; }).join('') +
+      `<div class="addrow addcap"><input data-draft="capName" value="${esc(state.drafts.capName)}" placeholder="Add a category, e.g. Gifts" aria-label="New spending category"><span class="amt"><span aria-hidden="true">₹</span><input data-draft="capAmt" type="number" inputmode="numeric" min="500" step="100" value="${esc(state.drafts.capAmt)}" placeholder="3,000" aria-label="Monthly cap in rupees"></span><button class="btn btn-soft" data-add="cap">Add</button></div>
+    </section>
     <section class="clay panel ${hl(RED_LINES_KEY)}"><div class="ph">${tile('lock','coral')}<div><h3 class="h3">Red lines</h3><div class="meta">Never, whatever the reason.</div></div></div><div class="rl">` +
       c.redLines.map((r,i)=>`<div class="it">${ic('x')}${esc(r)}<button data-rm="${i}" aria-label="Remove red line">${ic('x')}</button></div>`).join('') +
     `</div><div class="addrow"><input id="newRL" value="${esc(state.rlDraft)}" placeholder="Add a red line, e.g. Never buy from sellers who use fake countdown timers" aria-label="New red line"><button class="btn btn-soft" id="addRL">Add</button></div></section>
@@ -849,6 +903,12 @@ function renderConstitution(m){
   m.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{ c.alwaysAsk[b.dataset.tg]=!c.alwaysAsk[b.dataset.tg]; render(); });
   m.querySelectorAll('[data-cool]').forEach(b=>b.onclick=()=>{ c.coolingOff[b.dataset.cool]=!c.coolingOff[b.dataset.cool]; render(); });
   m.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ c.redLines.splice(+b.dataset.rm,1); render(); });
+  m.querySelectorAll('[data-draft]').forEach(inp=>{
+    inp.oninput=()=>{ state.drafts[inp.dataset.draft]=inp.value; };
+    inp.onkeydown=e=>{ if(e.key==='Enter') inp.closest('.addrow').querySelector('[data-add]').click(); };
+  });
+  m.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>addItem(b.dataset.add));
+  m.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>removeItem(b.dataset.del, b.dataset.key));
   $('#newRL').oninput=e=>{ state.rlDraft=e.target.value; };
   $('#addRL').onclick=()=>{ const v=$('#newRL').value.trim(); if(v){ c.redLines.push(v); state.rlDraft=''; render(); } };
   $('#newRL').onkeydown=e=>{ if(e.key==='Enter') $('#addRL').click(); };
