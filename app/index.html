@@ -206,9 +206,6 @@ b,strong{font-weight:700}
 .notice .x{margin-left:auto;border:0;background:rgba(255,255,255,.7);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#7A3F00;flex:none}
 .notice .x svg{width:14px;height:14px}
 .feed{display:flex;flex-direction:column;gap:10px}
-.feed-label{display:flex;align-items:center;gap:6px;margin:8px 4px -2px;font:650 13px/1 var(--f-text);color:var(--muted)}
-.feed-label:first-child{margin-top:0}
-.feed-label .ic{width:15px;height:15px;color:var(--violet)}
 .row{background:#fff;border-radius:var(--r-lg);box-shadow:var(--clay-sm);overflow:hidden;transition:box-shadow .25s}
 .row.held{box-shadow:var(--clay),0 0 0 1.5px rgba(242,138,30,.5);animation:heldglow 2.6s ease-in-out infinite}
 @keyframes heldglow{0%,100%{box-shadow:var(--clay),0 0 0 1.5px rgba(242,138,30,.5)}50%{box-shadow:var(--clay),0 0 0 5px rgba(242,138,30,.16)}}
@@ -396,6 +393,22 @@ input[type=range].range::-moz-range-thumb{width:24px;height:24px;border-radius:5
 .del svg{width:12px;height:12px}
 .vitem .ud .del{margin-left:4px}
 
+/* Live Feed filter bar */
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px;border-radius:var(--r-lg);margin-bottom:12px}
+.seg{display:flex;flex-wrap:wrap;gap:2px;padding:4px;border-radius:999px;background:var(--surface-tint);box-shadow:inset 0 0 0 1px var(--line)}
+.seg-b{border:0;background:transparent;border-radius:999px;padding:7px 11px;font:600 13.5px/1 var(--f-text);color:var(--ink-2);display:inline-flex;align-items:center;gap:6px}
+.seg-b .n{font-size:12px;font-weight:650;color:var(--muted);font-variant-numeric:tabular-nums}
+.seg-b:hover{color:var(--violet-deep)}
+.seg-b.on{background:#fff;color:var(--violet-deep);box-shadow:var(--clay-sm)}
+.seg-b.on .n{color:var(--violet)}
+.sel{display:inline-flex;align-items:center;gap:4px;padding:3px 6px 3px 14px;border-radius:999px;background:#fff;box-shadow:var(--clay-sm);font:600 12.5px var(--f-text);color:var(--muted)}
+.sel select{border:0;background:transparent;font:650 13.5px var(--f-text);color:var(--ink);padding:7px 2px;cursor:pointer;max-width:150px}
+.sel select:focus-visible{outline:3px solid var(--violet);outline-offset:2px;border-radius:8px}
+.filters .clear{margin-left:auto}
+.filters .clear .ic{width:14px;height:14px}
+.empty{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;padding:28px;border-radius:var(--r-lg);color:var(--ink-2);font-weight:550}
+.empty .ic{width:20px;height:20px;color:var(--violet)}
+
 a.brand{text-decoration:none;color:inherit;border-radius:16px}a.brand:hover .name{text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
@@ -488,6 +501,7 @@ const state = {
   loosened: 0,                 // Constitution loosenings this month (logged in Drift Audit)
   constitutionVersion: 7,
   highlightCap: null,          // cap key, always-ask key, cooling-off key, or RED_LINES_KEY
+  feed: { status:'all', where:'all', cat:'all', sort:'new' },  // Live Feed filters
   rlDraft: '',                 // text sitting in the "add a red line" input
   drafts: { value:'', ask:'', cool:'', capName:'', capAmt:'' },  // text in the other "add" inputs
   custom: { values:[], ask:[], cool:[], caps:[] },              // items Sameer added himself (removable)
@@ -506,44 +520,44 @@ const state = {
   spend: { 'Food delivery':5240, 'Subscriptions':2190, 'Shopping':6100, 'Travel':0 },
   scoreBonus: 0,
   actions: [
-    { id:11, fk:true, time:'09:40 am', icon:'tv', tile:'sky', desc:'Wants to buy a 55-inch TV on Flipkart', heldSub:'Big Billion Days sale · on hold', sub:'Big Billion Days sale',
+    { id:11, fk:true, ts:20, time:'09:40 am', icon:'tv', tile:'sky', desc:'Wants to buy a 55-inch TV on Flipkart', heldSub:'Big Billion Days sale · on hold', sub:'Big Billion Days sale',
       doneDesc:'Bought a 55-inch TV on Flipkart', blockedDesc:'Blocked: 55-inch TV on Flipkart',
       cat:'Shopping', amt:42990, status:'flagged', base:'flagged', over5k:true, verified:true,
       agent:'"It\'s 18% off in the sale, and you compared TVs twice last week. The seller is Fiduciary-verified."' },
-    { id:12, fk:true, time:'07:20 am', icon:'bag', tile:'mint', desc:'Restocked groceries on Flipkart Minutes', sub:'Cheapest of 4 stores that deliver in 20 min', cat:'Groceries', amt:1284, status:'aligned', base:'aligned', verified:true,
-      why:'Groceries have no cap or ask-first rule, and the seller is Fiduciary-verified: no discounts in return for data, and a reason on every order.',
-      agent:'"Your weekly list, minus the milk you still have. Cheapest of the 4 stores that deliver in 20 minutes."' },
-    { id:15, fk:true, time:'12:40 am', icon:'headset', tile:'coral', desc:'Wants to buy a gaming headset on Flipkart', heldSub:'Midnight-only price · seller not verified · on hold', sub:'Midnight-only price · seller not verified',
-      doneDesc:'Bought a gaming headset on Flipkart', blockedDesc:'Blocked: gaming headset on Flipkart',
-      cat:'Shopping', amt:3499, status:'flagged', base:'flagged', lateNight:true, capKey:'Shopping',
-      agent:'"It\'s ₹700 off until 1 am, and it\'s on your wishlist. This seller is not Fiduciary-verified."' },
-    { id:13, fk:true, time:'Yesterday', icon:'tag', tile:'apricot', desc:'Bought a mixer grinder on Flipkart', sub:'Waited for a price drop · saved ₹600', cat:'Shopping', amt:3199, status:'aligned', base:'aligned', capKey:'Shopping', verified:true,
-      agent:'"You asked for one under ₹3,500. It was ₹3,799 on Friday, so I waited for the price to drop."' },
-    { id:14, fk:true, time:'Yesterday', icon:'phone', tile:'violet', desc:'Bought a phone case on Flipkart', sub:'Your old case cracked last week', cat:'Shopping', amt:499, status:'aligned', base:'aligned', capKey:'Shopping', verified:true,
-      agent:'"Same brand as your last case. Cheapest Fiduciary-verified seller with delivery tomorrow."' },
-    { id:8, fk:true, time:'Yesterday', icon:'box', tile:'ink', desc:'Shared delivery address with a Flipkart seller\'s agent', sub:'Address allowed · health data not shared', cat:'Data sharing', status:'aligned', base:'aligned', verified:true },
-    { id:1, time:'11:42 pm', icon:'food', tile:'apricot', desc:'Wants to order late-night dinner from Zomato', heldSub:'On hold · not ordered yet',
-      doneDesc:'Ordered late-night dinner from Zomato', blockedDesc:'Blocked: late-night dinner from Zomato',
-      cat:'Food delivery', amt:640, status:'flagged', base:'flagged', lateNight:true, capKey:'Food delivery',
-      agent:'"You usually order on nights you work past 11. Queued your usual."' },
-    { id:2, time:'09:15 am', icon:'renew', tile:'violet', desc:'Wants to renew \'CalmMind Premium\'', heldSub:'Last opened 61 days ago · on hold', sub:'Last opened 61 days ago',
+    { id:2, ts:45, time:'09:15 am', icon:'renew', tile:'violet', desc:'Wants to renew \'CalmMind Premium\'', heldSub:'Last opened 61 days ago · on hold', sub:'Last opened 61 days ago',
       doneDesc:'Renewed \'CalmMind Premium\'', blockedDesc:'Blocked: renewal of \'CalmMind Premium\'',
       cat:'Subscriptions', amt:999, amtNote:'/yr', status:'flagged', base:'flagged', subscription:true,
       agent:'"Auto-renewal is due. You subscribed last year."' },
-    { id:3, time:'08:30 am', icon:'cab', tile:'sky', desc:'Booked cab to office', cat:'Travel', amt:210, status:'aligned', base:'aligned' },
-    { id:4, time:'08:05 am', icon:'chat', tile:'mint', desc:'Replied to Mum: "Will call this evening"', cat:'Communication', status:'aligned', base:'aligned', familyReply:true,
+    { id:12, fk:true, ts:65, time:'08:55 am', icon:'bag', tile:'mint', desc:'Restocked groceries on Flipkart Minutes', sub:'Cheapest of 4 stores that deliver in 20 min', cat:'Groceries', amt:1284, status:'aligned', base:'aligned', verified:true,
+      why:'Groceries have no cap or ask-first rule, and the seller is Fiduciary-verified: no discounts in return for data, and a reason on every order.',
+      agent:'"Your weekly list, minus the milk you still have. Cheapest of the 4 stores that deliver in 20 minutes."' },
+    { id:3, ts:90, time:'08:30 am', icon:'cab', tile:'sky', desc:'Booked cab to office', cat:'Travel', amt:210, status:'aligned', base:'aligned' },
+    { id:4, ts:115, time:'08:05 am', icon:'chat', tile:'mint', desc:'Replied to Mum: "Will call this evening"', cat:'Communication', status:'aligned', base:'aligned', familyReply:true,
       agent:'"You reply to Mum within an hour on weekdays. Kept it short."' },
-    { id:5, time:'07:50 am', icon:'shoe', tile:'coral', desc:'Wants to buy running shoes', heldSub:'Replacing pair bought 14 months ago · on hold', sub:'Replacing pair bought 14 months ago',
+    { id:5, ts:130, time:'07:50 am', icon:'shoe', tile:'coral', desc:'Wants to buy running shoes', heldSub:'Replacing pair bought 14 months ago · on hold', sub:'Replacing pair bought 14 months ago',
       doneDesc:'Bought running shoes', blockedDesc:'Blocked: running shoes',
       cat:'Shopping', amt:7499, status:'flagged', base:'flagged', over5k:true, verified:true,
       agent:'"Your old pair has done 820 km. Health is your #2 value. This seller is Fiduciary-verified, so no pressure tactics."' },
-    { id:6, time:'Yesterday', icon:'bank', tile:'mint', desc:'Moved ₹10,000 to savings', cat:'Finance', status:'aligned', base:'aligned' },
-    { id:7, time:'Yesterday', icon:'gym', tile:'ink', desc:'Declined gym \'win-back\' offer', cat:'Subscriptions', status:'aligned', base:'aligned' },
-    { id:9, time:'2 days ago', icon:'share', tile:'ink', desc:'Tried to share step-count data for a \'fitness discount\'', cat:'Data sharing',
+    { id:15, fk:true, ts:560, time:'12:40 am', icon:'headset', tile:'coral', desc:'Wants to buy a gaming headset on Flipkart', heldSub:'Midnight-only price · seller not verified · on hold', sub:'Midnight-only price · seller not verified',
+      doneDesc:'Bought a gaming headset on Flipkart', blockedDesc:'Blocked: gaming headset on Flipkart',
+      cat:'Shopping', amt:3499, status:'flagged', base:'flagged', lateNight:true, capKey:'Shopping',
+      agent:'"It\'s ₹700 off until 1 am, and it\'s on your wishlist. This seller is not Fiduciary-verified."' },
+    { id:1, ts:618, time:'11:42 pm', icon:'food', tile:'apricot', desc:'Wants to order late-night dinner from Zomato', heldSub:'On hold · not ordered yet',
+      doneDesc:'Ordered late-night dinner from Zomato', blockedDesc:'Blocked: late-night dinner from Zomato',
+      cat:'Food delivery', amt:640, status:'flagged', base:'flagged', lateNight:true, capKey:'Food delivery',
+      agent:'"You usually order on nights you work past 11. Queued your usual."' },
+    { id:13, fk:true, ts:1200, time:'Yesterday', icon:'tag', tile:'apricot', desc:'Bought a mixer grinder on Flipkart', sub:'Waited for a price drop · saved ₹600', cat:'Shopping', amt:3199, status:'aligned', base:'aligned', capKey:'Shopping', verified:true,
+      agent:'"You asked for one under ₹3,500. It was ₹3,799 on Friday, so I waited for the price to drop."' },
+    { id:6, ts:1260, time:'Yesterday', icon:'bank', tile:'mint', desc:'Moved ₹10,000 to savings', cat:'Finance', status:'aligned', base:'aligned' },
+    { id:14, fk:true, ts:1320, time:'Yesterday', icon:'phone', tile:'violet', desc:'Bought a phone case on Flipkart', sub:'Your old case cracked last week', cat:'Shopping', amt:499, status:'aligned', base:'aligned', capKey:'Shopping', verified:true,
+      agent:'"Same brand as your last case. Cheapest Fiduciary-verified seller with delivery tomorrow."' },
+    { id:7, ts:1380, time:'Yesterday', icon:'gym', tile:'ink', desc:'Declined gym \'win-back\' offer', cat:'Subscriptions', status:'aligned', base:'aligned' },
+    { id:8, fk:true, ts:1440, time:'Yesterday', icon:'box', tile:'ink', desc:'Shared delivery address with a Flipkart seller\'s agent', sub:'Address allowed · health data not shared', cat:'Data sharing', status:'aligned', base:'aligned', verified:true },
+    { id:9, ts:2900, time:'2 days ago', icon:'share', tile:'ink', desc:'Tried to share step-count data for a \'fitness discount\'', cat:'Data sharing',
       status:'blocked', base:'blocked', redline:true,
       why:'Red line: "Never share health data with merchants." Fiduciary blocked this before it happened.',
       agent:'"A seller offered 12% off running shoes in return for step data."' },
-    { id:10, time:'2 days ago', icon:'calendar', tile:'sky', desc:'Scheduled dentist appointment', cat:'Health', status:'aligned', base:'aligned' }
+    { id:10, ts:2950, time:'2 days ago', icon:'calendar', tile:'sky', desc:'Scheduled dentist appointment', cat:'Health', status:'aligned', base:'aligned' }
   ],
   audit: {
     trend:[41,46,50,53,57],      // Apr–Aug; Sep is the live score
@@ -678,6 +692,7 @@ const NAV = [
   {k:'reps', ic:'target', label:'Agency Reps'}
 ];
 
+let lastScreen=null;
 function render(){
   // sidebar
   $('#sideScore').innerHTML = `${score()}<small>of 100</small>`;
@@ -688,17 +703,53 @@ function render(){
   flashScore();
 
   const m=$('#main');
-  m.className='main';
-  void m.offsetWidth;               // restart the rise animation
-  m.className='main rise';
+  const changed = state.activeScreen!==lastScreen; lastScreen=state.activeScreen;
+  if(changed){                      // replay the rise animation only on a new screen
+    m.className='main';
+    void m.offsetWidth;
+    m.className='main rise';
+  }
   const deepLink = !!state.highlightCap;   // a deep link scrolls to its target instead of the top
   ({feed:renderFeed, audit:renderAudit, constitution:renderConstitution, reps:renderReps})[state.activeScreen](m);
-  if(!deepLink) window.scrollTo(0,0);
+  if(changed && !deepLink) window.scrollTo(0,0);
 }
 
 function topbar(title, sub, extra=''){
   return `<div class="topbar"><div><h1 class="display">${title}${extra}</h1><div class="sub">${sub}</div></div>
     <div class="who"><div><div class="nm">Sameer S.</div><div class="dt">${state.today} · agent Aria</div></div><div class="av" aria-hidden="true">S</div></div></div>`;
+}
+
+/* ---- Live Feed filters ---- */
+const FEED_STATUS = {
+  all:      a => true,
+  waiting:  a => isPending(a),
+  aligned:  a => a.status==='aligned',
+  approved: a => a.status==='approved',
+  blocked:  a => a.status==='blocked',
+};
+const FEED_STATUS_LABEL = { all:'All', waiting:'Waiting', aligned:'Allowed', approved:'Approved', blocked:'Blocked' };
+const FEED_SORT = { new:'Newest first', old:'Oldest first', amtDesc:'Highest amount', amtAsc:'Lowest amount', waiting:'Waiting first' };
+function sortFeed(list, how){
+  const byNew=(a,b)=>a.ts-b.ts;
+  const amt=(a,missing)=>a.amt||missing;
+  const cmp = { new:byNew, old:(a,b)=>b.ts-a.ts,
+    amtDesc:(a,b)=>amt(b,-1)-amt(a,-1) || byNew(a,b),
+    amtAsc:(a,b)=>amt(a,Infinity)-amt(b,Infinity) || byNew(a,b),
+    waiting:(a,b)=>(isPending(b)-isPending(a)) || byNew(a,b) }[how] || byNew;
+  return [...list].sort(cmp);
+}
+function feedFilters(f, scoped, active){
+  const cats=[...new Set(state.actions.map(a=>a.cat))];
+  const opt=(v,l,cur)=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(l)}</option>`;
+  return `<div class="filters clay" role="group" aria-label="Filter and sort the feed">
+    <div class="seg" role="radiogroup" aria-label="Status">` +
+      Object.keys(FEED_STATUS).map(k=>`<button class="seg-b ${f.status===k?'on':''}" role="radio" aria-checked="${f.status===k}" data-fstatus="${k}">${FEED_STATUS_LABEL[k]}<span class="n">${scoped.filter(FEED_STATUS[k]).length}</span></button>`).join('') +
+    `</div>
+    <label class="sel"><select data-f="where" aria-label="Where">${opt('all','Everywhere',f.where)}${opt('fk','Flipkart only',f.where)}${opt('other','Not Flipkart',f.where)}</select></label>
+    <label class="sel"><select data-f="cat" aria-label="Category">${opt('all','All categories',f.cat)}${cats.map(c=>opt(c,c,f.cat)).join('')}</select></label>
+    <label class="sel"><span>Sort</span><select data-f="sort">${Object.keys(FEED_SORT).map(k=>opt(k,FEED_SORT[k],f.sort)).join('')}</select></label>
+    ${active?`<button class="btn btn-ghost btn-sm clear" data-fclear>${ic('x')}Clear</button>`:''}
+  </div>`;
 }
 
 /* ---- Live Feed ---- */
@@ -710,6 +761,10 @@ function renderFeed(m){
   const blockedNow = state.actions.filter(a=>a.status==='blocked').length;
   const approvedNow = state.actions.filter(a=>a.status==='approved').length;
   const aw=awaiting();
+  const f=state.feed;
+  const scoped = state.actions.filter(a => (f.where==='all' || (f.where==='fk')===!!a.fk) && (f.cat==='all' || a.cat===f.cat));
+  const list = sortFeed(scoped.filter(a => FEED_STATUS[f.status](a)), f.sort);
+  const active = f.status!=='all' || f.where!=='all' || f.cat!=='all' || f.sort!=='new';
   m.innerHTML = topbar('Live Feed', `What Aria did. What's waiting for you.`) +
   `<section class="hero clay">
      <div><h2 class="h2">Good morning, Sameer</h2>
@@ -722,11 +777,10 @@ function renderFeed(m){
      </div>
    </section>` +
   (state.nudgeDismissed ? '' : `<div class="notice">${ic('store')}<span>2 days ago, a seller's agent offered a discount in return for your data. Your red line blocked it. Fiduciary-verified sellers (✓) promise never to do this.</span><button class="x" id="dismissNudge" aria-label="Dismiss">${ic('x')}</button></div>`) +
+  feedFilters(f, scoped, active) +
   `<div class="feed">` +
-  state.actions.map((a,i)=>{
-    const prev = state.actions[i-1];
-    const label = i===0 && a.fk ? `<div class="feed-label">${ic('store')}On Flipkart</div>`
-                : prev && prev.fk && !a.fk ? `<div class="feed-label">Everything else</div>` : '';
+  (list.length ? '' : `<div class="empty clay">${ic('info')}<span>No actions match these filters.</span><button class="btn btn-soft btn-sm" data-fclear>Clear filters</button></div>`) +
+  list.map(a=>{
     const expandable = !!a.why;
     const open = state.expanded.has(a.id);
     const sub = displaySub(a);
@@ -737,7 +791,7 @@ function renderFeed(m){
         <span class="amt num">${a.amt?fmt(a.amt)+(a.amtNote?`<small>${a.amtNote}</small>`:''):''}</span>
         <span class="pill ${pc}">${pl}</span>
         <span class="chev">${ic('arrow')}</span>`;
-    return label + `<article class="row ${expandable?'expandable':''} ${isPending(a)?'held':''} ${open?'open':''}" data-id="${a.id}">
+    return `<article class="row ${expandable?'expandable':''} ${isPending(a)?'held':''} ${open?'open':''}" data-id="${a.id}">
       ${expandable ? `<button class="head" data-toggle="${a.id}" aria-expanded="${open}">${head}</button>` : `<div class="head">${head}</div>`}
       ${expandable && open ? `<div class="detail">
         <div class="dcard why ${whyCls(a.status)}"><h4>${whyHead(a.status)}</h4>${esc(a.why)}</div>
@@ -754,6 +808,10 @@ function renderFeed(m){
   }).join('') + `</div>`;
 
   m.querySelectorAll('[data-toggle]').forEach(h=>h.onclick=()=>{ const id=+h.dataset.toggle; state.expanded.has(id)?state.expanded.delete(id):state.expanded.add(id); render(); });
+  const refocus = sel => { const el=m.querySelector(sel); el && el.focus(); };
+  m.querySelectorAll('[data-fstatus]').forEach(b=>b.onclick=()=>{ f.status=b.dataset.fstatus; render(); refocus(`[data-fstatus="${f.status}"]`); });
+  m.querySelectorAll('[data-f]').forEach(sel=>sel.onchange=()=>{ f[sel.dataset.f]=sel.value; render(); refocus(`[data-f="${sel.dataset.f}"]`); });
+  m.querySelectorAll('[data-fclear]').forEach(b=>b.onclick=()=>{ Object.assign(f,{status:'all',where:'all',cat:'all',sort:'new'}); render(); refocus('[data-fstatus="all"]'); });
   m.querySelectorAll('[data-act]').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); decide(+b.dataset.id, b.dataset.act); });
   const dn=$('#dismissNudge'); if(dn) dn.onclick=()=>{ state.nudgeDismissed=true; render(); };
 }
