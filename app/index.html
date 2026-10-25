@@ -481,8 +481,8 @@ const state = {
   constitutionVersion: 7,
   highlightCap: null,          // cap key, always-ask key, cooling-off key, or RED_LINES_KEY
   rlDraft: '',                 // text sitting in the "add a red line" input
-  drafts: { value:'', ask:'', capName:'', capAmt:'' },  // text in the other "add" inputs
-  custom: { values:[], ask:[], caps:[] },              // items Sameer added himself (removable)
+  drafts: { value:'', ask:'', cool:'', capName:'', capAmt:'' },  // text in the other "add" inputs
+  custom: { values:[], ask:[], cool:[], caps:[] },              // items Sameer added himself (removable)
   capMax: { 'Travel':30000 },  // slider ceiling per cap; others default to 15,000
   expanded: new Set(),
   nudgeDismissed: false,
@@ -831,7 +831,8 @@ function renderAudit(m){
 /* ---- Constitution ---- */
 /* "Add" rows and removal for things Sameer adds himself (built-in items stay fixed). */
 const addRow = (kind, placeholder, label) => `<div class="addrow"><input data-draft="${kind}" value="${esc(state.drafts[kind])}" placeholder="${placeholder}" aria-label="${label}"><button class="btn btn-soft" data-add="${kind}">Add</button></div>`;
-const rmBtn = (kind, key) => state.custom[kind==='value'?'values':kind==='ask'?'ask':'caps'].includes(key)
+const LIST = { value:'values', ask:'ask', cool:'cool', cap:'caps' };
+const rmBtn = (kind, key) => state.custom[LIST[kind]].includes(key)
   ? `<button class="del" data-del="${kind}" data-key="${esc(key)}" aria-label="Remove ${esc(key)}">${ic('x')}</button>` : '';
 const sameName = (list, v) => list.some(x => x.toLowerCase() === v.toLowerCase());
 
@@ -845,6 +846,10 @@ function addItem(kind){
     const v=d.ask.trim(); if(!v) return;
     if(sameName(Object.keys(c.alwaysAsk),v)) return toast(`"${esc(v)}" is already on your list.`);
     c.alwaysAsk[v]=true; state.custom.ask.push(v); d.ask='';
+  } else if(kind==='cool'){
+    const v=d.cool.trim(); if(!v) return;
+    if(sameName(Object.keys(c.coolingOff),v)) return toast(`"${esc(v)}" is already a cooling-off rule.`);
+    c.coolingOff[v]=true; state.custom.cool.push(v); d.cool='';
   } else if(kind==='cap'){
     const v=d.capName.trim(), amt=Math.round(+d.capAmt/100)*100;
     if(!v) return toast('Name the category first, e.g. Gifts.');
@@ -858,9 +863,10 @@ function addItem(kind){
   toast('Added. Save to apply it to Aria.');
 }
 function removeItem(kind, key){
-  const c=state.constitution, list=state.custom[kind==='value'?'values':kind==='ask'?'ask':'caps'];
+  const c=state.constitution, list=state.custom[LIST[kind]];
   if(kind==='value') c.values=c.values.filter(x=>x!==key);
   else if(kind==='ask') delete c.alwaysAsk[key];
+  else if(kind==='cool') delete c.coolingOff[key];
   else delete c.caps[key];
   list.splice(list.indexOf(key),1);
   render();
@@ -880,7 +886,8 @@ function renderConstitution(m){
       Object.keys(c.alwaysAsk).map(k=>`<div class="toggle ${hl(k)}"><span>${esc(k)}</span><span class="tr">${rmBtn('ask',k)}${sw(c.alwaysAsk[k],`data-tg="${esc(k)}" aria-label="${esc(k)}"`)}</span></div>`).join('') +
       addRow('ask','Add a rule, e.g. Booking flights','New always-ask rule') +
       `<div class="cool"><div class="ch">${ic('moon')}Cooling-off</div>` +
-      Object.keys(c.coolingOff).map(k=>`<div class="toggle ${hl(k)}"><span>${k}</span>${sw(c.coolingOff[k],`data-cool="${k}" aria-label="${k}"`)}</div>`).join('') +
+      Object.keys(c.coolingOff).map(k=>`<div class="toggle ${hl(k)}"><span>${esc(k)}</span><span class="tr">${rmBtn('cool',k)}${sw(c.coolingOff[k],`data-cool="${esc(k)}" aria-label="${esc(k)}"`)}</span></div>`).join('') +
+      addRow('cool','Add a cool-off, e.g. Gadgets wait 48 hours','New cooling-off rule') +
     `</div></section>
     </div><div class="col">
     <section class="clay panel"><div class="ph">${tile('cart','apricot')}<div><h3 class="h3">Spending caps</h3><div class="meta">₹ per month</div></div></div>` +

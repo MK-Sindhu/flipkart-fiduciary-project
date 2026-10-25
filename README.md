@@ -7,7 +7,7 @@ A product concept for 2040: an independent, user-paid check between a person and
 - **Website:** [fiduciary.ndstill.com](https://fiduciary.ndstill.com)
 - **Live demo:** [fiduciary.ndstill.com/app](https://fiduciary.ndstill.com/app/), a single-file HTML/CSS/JS prototype that also runs offline
 
-Built for the Flipkart APM '29 case submission.
+Built for the Flipkart APM case submission.
 
 ## Structure
 
